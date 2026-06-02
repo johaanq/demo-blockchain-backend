@@ -1,6 +1,6 @@
-# Demo Blockchain — Backend (NestJS)
+# Ledger electoral — Backend (NestJS)
 
-API con **NestJS**, **arquitectura hexagonal** y **DDD**.
+API para **registro inmutable de votos** (demo: segunda vuelta Perú 2026, **Keiko Fujimori vs Roberto Sánchez**). NestJS, arquitectura hexagonal y DDD.
 
 ## Estructura
 
@@ -25,32 +25,30 @@ API: `http://localhost:4000/api`
 
 ## Docker
 
-Desde esta carpeta (`demo-blockchain-backend`):
-
 ```bash
 docker compose up --build
-```
-
-- API: `http://localhost:4000/api`
-- Variables en `docker-compose.yml`: `PORT`, `DIFFICULTY`
-
-Detener:
-
-```bash
-docker compose down
 ```
 
 ## Endpoints
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/api/health` | Estado |
-| POST | `/api/chain/init` | Bloque génesis |
-| GET | `/api/chain` | Listar cadena |
-| POST | `/api/chain/blocks` | Añadir bloque |
-| POST | `/api/chain/mine` | Minar (PoW) |
-| GET | `/api/chain/validate` | Validar integridad |
-| POST | `/api/chain/tamper` | Alterar sin recalcular hash (demo) |
+| GET | `/api/health` | Estado y dificultad PoW |
+| PATCH | `/api/config/difficulty` | Ajustar dificultad del sellado |
+| POST | `/api/chain/init` | Apertura de jornada (génesis) |
+| POST | `/api/chain/seed` | Génesis + 4 votos demo (sin sellar) |
+| GET | `/api/chain` | Cadena de escrutinio |
+| POST | `/api/chain/blocks` | Registrar voto sin sellar |
+| POST | `/api/chain/mine` | Sellar voto (PoW) |
+| POST | `/api/chain/mine/stream` | Sellar con eventos SSE en vivo |
+| GET | `/api/chain/validate` | Validar integridad del escrutinio |
+| POST | `/api/chain/tamper` | Simular fraude (demo) |
+
+## Génesis
+
+Al iniciar la cadena se crea el bloque:
+
+`GENESIS | 2da-vuelta-PE | KEIKO vs SANCHEZ | apertura-jornada | 07-jun-2026`
 
 ## Variables de entorno
 

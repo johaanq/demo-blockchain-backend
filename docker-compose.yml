@@ -6,9 +6,10 @@ services:
     container_name: demo-blockchain-api
     ports:
       - "4000:4000"
+    env_file:
+      - .env
     environment:
       PORT: 4000
-      DIFFICULTY: 4
     restart: unless-stopped
     healthcheck:
       test:

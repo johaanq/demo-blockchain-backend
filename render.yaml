@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: demo-blockchain-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "4000"
+      - key: DIFFICULTY
+        value: "4"
+      - key: DNI_API_PROVIDER
+        value: apiperu
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: DNI_API_TOKEN
+        sync: false
