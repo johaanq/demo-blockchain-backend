@@ -5,12 +5,19 @@ import type { IHashService } from "../../domain/ports/IHashService";
 
 export type ValidationIssueDetail = {
   blockIndex: number;
-  kind: "hash_mismatch" | "broken_link" | "pow_pending" | "pow_invalid";
+  kind:
+    | "hash_mismatch"
+    | "broken_link"
+    | "pow_pending"
+    | "pow_invalid"
+    | "emission_mismatch";
   title: string;
   detail: string;
   storedHash?: string;
   expectedHash?: string;
   dataSnippet?: string;
+  officialDataSnippet?: string;
+  officialHash?: string;
 };
 
 export class ValidateChainUseCase {
@@ -40,10 +47,10 @@ export class ValidateChainUseCase {
     return {
       blockIndex: block.index,
       kind: "hash_mismatch",
-      title: `Registro #${block.index}: contenido del sufragio alterado`,
+      title: `Registro #${block.index}: huella digital inconsistente`,
       detail:
-        "El hash SHA-256 guardado al emitir el sufragio ya no coincide con el hash recalculado a partir del contenido actual del bloque. " +
-        "Esto ocurre cuando alguien modifica el voto (por ejemplo, cambia la opción o el DNI) sin volver a sellar el bloque con Proof of Work.",
+        "El hash almacenado no coincide con el recalculado a partir del contenido actual. " +
+        "Indica manipulación sin re-sellar correctamente el bloque.",
       storedHash,
       expectedHash,
       dataSnippet: this.snippet(block.data),
@@ -53,44 +60,37 @@ export class ValidateChainUseCase {
   async execute() {
     const chain = await this.repository.load();
     const blocks = chain.getBlocks();
+    const emissionRecords = await this.repository.getEmissionRecords();
     const issues: string[] = [];
     const issueDetails: ValidationIssueDetail[] = [];
 
-    const valid = chain.isValid((block, previous) => {
+    chain.isValid((block, previous) => {
       if (!this.blockFactory.verify(block)) {
-        const detail = this.hashMismatchIssue(block);
-        issueDetails.push(detail);
-        issues.push(
-          `Registro #${block.index}: hash inválido — el contenido fue modificado sin recalcular la huella digital`,
-        );
+        issueDetails.push(this.hashMismatchIssue(block));
+        issues.push(`Registro #${block.index}: huella digital inconsistente`);
         return false;
       }
       if (previous && block.previousHash.toString() !== previous.hash.toString()) {
-        const detail: ValidationIssueDetail = {
+        issueDetails.push({
           blockIndex: block.index,
           kind: "broken_link",
           title: `Registro #${block.index}: enlace roto con el registro anterior`,
           detail:
-            `El hash del registro #${block.index - 1} ya no coincide con el campo «hash anterior» de este bloque. ` +
-            "La cadena dejó de ser continua (como si se hubiera insertado o reemplazado un eslabón).",
+            `El hash del registro #${block.index - 1} ya no coincide con el «hash anterior» de este bloque.`,
           storedHash: block.previousHash.toString(),
           expectedHash: previous.hash.toString(),
-        };
-        issueDetails.push(detail);
+        });
         issues.push(`Registro #${block.index}: enlace roto con el registro #${block.index - 1}`);
         return false;
       }
       if (block.index > 0 && block.nonce === 0) {
-        const detail: ValidationIssueDetail = {
+        issueDetails.push({
           blockIndex: block.index,
           kind: "pow_pending",
           title: `Registro #${block.index}: sufragio sin sellar (PoW)`,
-          detail:
-            "Este bloque tiene nonce 0: nunca se completó la prueba de trabajo al registrar el voto. " +
-            "En producción, un sufragio debe quedar sellado antes de formar parte del escrutinio.",
+          detail: "Este bloque no completó la prueba de trabajo al registrarse.",
           dataSnippet: this.snippet(block.data),
-        };
-        issueDetails.push(detail);
+        });
         issues.push(`Registro #${block.index}: sufragio sin sellar (PoW pendiente)`);
         return false;
       }
@@ -99,38 +99,65 @@ export class ValidateChainUseCase {
         block.nonce > 0 &&
         !this.hashService.meetsDifficulty(block.hash.toString(), this.difficulty)
       ) {
-        const detail: ValidationIssueDetail = {
+        issueDetails.push({
           blockIndex: block.index,
           kind: "pow_invalid",
           title: `Registro #${block.index}: sellado PoW insuficiente`,
-          detail:
-            `El hash del registro #${block.index} no cumple la dificultad actual (${this.difficulty} ceros iniciales). ` +
-            "El bloque no fue minado con el nivel de prueba de trabajo exigido.",
+          detail: `El hash no cumple la dificultad actual (${this.difficulty} ceros iniciales).`,
           storedHash: block.hash.toString(),
           dataSnippet: this.snippet(block.data),
-        };
-        issueDetails.push(detail);
+        });
         issues.push(`Registro #${block.index}: hash minado no cumple dificultad PoW`);
         return false;
       }
       return true;
     });
 
+    for (const record of emissionRecords) {
+      const block = blocks[record.blockIndex];
+      if (!block) continue;
+
+      if (block.data !== record.data) {
+        issueDetails.push({
+          blockIndex: record.blockIndex,
+          kind: "emission_mismatch",
+          title: `Registro #${record.blockIndex}: sufragio distinto al acta de emisión`,
+          detail:
+            "El contenido del sufragio ya no coincide con la acta de emisión guardada al momento del voto. " +
+            "Aunque un atacante re-calcule hashes y re-mina la cadena, esta comparación revela qué voto fue cambiado.",
+          officialDataSnippet: this.snippet(record.data),
+          dataSnippet: this.snippet(block.data),
+          officialHash: record.hash,
+          storedHash: block.hash.toString(),
+        });
+        issues.push(
+          `Registro #${record.blockIndex}: el sufragio difiere del acta de emisión oficial`,
+        );
+      }
+    }
+
+    const allValid = issues.length === 0;
+    const emissionIssues = issueDetails.filter((d) => d.kind === "emission_mismatch");
+
     const howItWorks =
-      "Al emitir un sufragio, el sistema calcula SHA-256(index + timestamp + contenido + hashAnterior + nonce) " +
-      "y guarda esa huella como hash del bloque. Al auditar, vuelve a calcular la misma fórmula: si el contenido " +
-      "cambió pero el hash no se actualizó, la comparación falla y se reporta alteración.";
+      "Al emitir cada sufragio se guarda una copia inmutable en el acta de emisión (contenido + hash oficial). " +
+      "Un atacante puede alterar el voto, recalcular hashes y re-minar la cadena; al validar, el sistema contrasta " +
+      "la cadena actual con esa acta y reporta qué registro dejó de coincidir.";
 
     return {
-      valid,
+      valid: allValid,
       length: blocks.length,
       issues,
       issueDetails,
-      message: valid
-        ? "El registro electoral es íntegro. Ningún voto fue alterado."
-        : issueDetails.length === 1
-          ? `Alteración detectada en el registro #${issueDetails[0].blockIndex}.`
-          : `Alteración detectada en ${issueDetails.length} registro(s) de la cadena.`,
+      message: allValid
+        ? "El registro electoral es íntegro. Ningún voto difiere del acta de emisión."
+        : emissionIssues.length > 0
+          ? emissionIssues.length === 1
+            ? `Fraude detectado: el registro #${emissionIssues[0].blockIndex} ya no coincide con el acta de emisión.`
+            : `Fraude detectado en ${emissionIssues.length} registro(s) respecto al acta de emisión.`
+          : issueDetails.length === 1
+            ? `Alteración detectada en el registro #${issueDetails[0].blockIndex}.`
+            : `Alteración detectada en ${issueDetails.length} registro(s) de la cadena.`,
       howItWorks,
     };
   }

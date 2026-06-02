@@ -1,5 +1,6 @@
 import type { IBlockchainRepository } from "../../domain/ports/IBlockchainRepository";
 import { BlockFactory } from "../services/BlockFactory";
+import { recordBlockEmission } from "../services/EmissionLedger";
 import type { PowMineHooks } from "../services/PowMiner";
 import { PowMiner } from "../services/PowMiner";
 
@@ -42,6 +43,7 @@ export class AddBlockUseCase {
 
     const updated = chain.append(sealed);
     await this.repository.save(updated);
+    await recordBlockEmission(this.repository, sealed);
 
     return {
       block: sealed.toJSON(),

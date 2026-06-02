@@ -27,7 +27,7 @@ const MAX_DIFFICULTY = 6;
 export class BlockchainService implements OnModuleInit {
   private readonly initializeChainUseCase: InitializeChainUseCase;
   private readonly getChainUseCase: GetChainUseCase;
-  private readonly tamperBlockUseCase: TamperBlockUseCase;
+  private tamperBlockUseCase!: TamperBlockUseCase;
   private seedDemoUseCase!: SeedDemoUseCase;
   private readonly blockFactory: BlockFactory;
   private readonly hashService: IHashService;
@@ -47,7 +47,6 @@ export class BlockchainService implements OnModuleInit {
     this.difficulty = this.clampDifficulty(initialDifficulty);
     this.initializeChainUseCase = new InitializeChainUseCase(repository, this.blockFactory);
     this.getChainUseCase = new GetChainUseCase(repository);
-    this.tamperBlockUseCase = new TamperBlockUseCase(repository);
     this.rebuildPowUseCases();
   }
 
@@ -188,6 +187,11 @@ export class BlockchainService implements OnModuleInit {
       this.repository,
       this.blockFactory,
       this.addBlockUseCase,
+    );
+    this.tamperBlockUseCase = new TamperBlockUseCase(
+      this.repository,
+      this.blockFactory,
+      powMiner,
     );
   }
 

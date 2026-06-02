@@ -57,6 +57,24 @@ export class BlockFactory {
     return block.withMining(nonce, hash);
   }
 
+  createDraft(
+    index: number,
+    timestamp: number,
+    data: string,
+    previousHash: Hash,
+  ): Block {
+    const nonce = 0;
+    const input: BlockHashInput = {
+      index,
+      timestamp,
+      data,
+      previousHash: previousHash.toString(),
+      nonce,
+    };
+    const hash = Hash.create(this.hashService.compute(input));
+    return Block.create({ index, timestamp, data, previousHash, nonce, hash });
+  }
+
   verify(block: Block): boolean {
     const input: BlockHashInput = {
       index: block.index,
