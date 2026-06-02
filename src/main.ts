@@ -1,6 +1,9 @@
+import { config } from "dotenv";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
+
+config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,6 +24,9 @@ async function bootstrap() {
   await app.listen(port, "0.0.0.0");
   console.log(`Blockchain API (NestJS) — http://localhost:${port}/api`);
   console.log(`Dificultad PoW: ${process.env.DIFFICULTY ?? 4} ceros iniciales`);
+  console.log(
+    `Consulta DNI: ${process.env.DNI_API_TOKEN?.trim() ? "token configurado" : "sin token (revise .env)"}`,
+  );
 }
 
 bootstrap();
