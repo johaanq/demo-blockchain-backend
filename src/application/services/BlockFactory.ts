@@ -10,7 +10,7 @@ export class BlockFactory {
     const input: BlockHashInput = {
       index: 0,
       timestamp,
-      data: "GENESIS · ledger-demo v1",
+      data: "GENESIS | 2da-vuelta-PE | KEIKO vs SANCHEZ | apertura-jornada | 07-jun-2026",
       previousHash: Hash.genesis().toString(),
       nonce: 0,
     };

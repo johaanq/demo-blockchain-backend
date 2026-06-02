@@ -24,7 +24,10 @@ export class ValidateChainUseCase {
         issues.push(`Bloque ${block.index}: enlace roto con el anterior`);
         return false;
       }
-      // PoW opcional: solo advertimos si un bloque minado ya no cumple dificultad
+      if (block.index > 0 && block.nonce === 0) {
+        issues.push(`Bloque ${block.index}: sufragio sin sellar (PoW pendiente)`);
+        return false;
+      }
       if (
         block.index > 0 &&
         block.nonce > 0 &&
@@ -41,8 +44,8 @@ export class ValidateChainUseCase {
       length: blocks.length,
       issues,
       message: valid
-        ? "La cadena es íntegra. Ningún bloque fue alterado."
-        : "Cadena inválida. Algún bloque fue manipulado o el hash es incorrecto.",
+        ? "El registro electoral es íntegro. Ningún voto fue alterado."
+        : "Escrutinio inválido. Se detectó manipulación o hash incorrecto en la cadena.",
     };
   }
 }

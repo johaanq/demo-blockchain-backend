@@ -19,5 +19,6 @@ export type MineStreamEvent =
         nonce: number;
         hash: string;
       };
+      sealedCount?: number;
     }
   | { type: "error"; message: string };

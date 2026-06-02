@@ -24,6 +24,12 @@ export class BlockchainController {
     return this.blockchain.initChain();
   }
 
+  @Post("chain/seed")
+  @HttpCode(HttpStatus.CREATED)
+  seedDemo() {
+    return this.blockchain.seedDemo();
+  }
+
   @Get("chain")
   getChain() {
     return this.blockchain.getChain();
@@ -35,14 +41,8 @@ export class BlockchainController {
     return this.blockchain.addBlock(dto.data);
   }
 
-  @Post("chain/mine")
-  @HttpCode(HttpStatus.CREATED)
-  mineBlock(@Body() dto: BlockDataDto) {
-    return this.blockchain.mineBlock(dto.data);
-  }
-
-  @Post("chain/mine/stream")
-  async mineBlockStream(@Body() dto: BlockDataDto, @Res() res: Response) {
+  @Post("chain/blocks/stream")
+  async addBlockStream(@Body() dto: BlockDataDto, @Res() res: Response) {
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
@@ -53,7 +53,32 @@ export class BlockchainController {
     };
 
     try {
-      await this.blockchain.mineBlockStream(dto.data, send);
+      await this.blockchain.addBlockStream(dto.data, send);
+      res.end();
+    } catch {
+      res.end();
+    }
+  }
+
+  @Post("chain/seal-pending")
+  @HttpCode(HttpStatus.OK)
+  sealPending() {
+    return this.blockchain.sealPendingBlocks();
+  }
+
+  @Post("chain/seal-pending/stream")
+  async sealPendingStream(@Res() res: Response) {
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const send = (event: unknown) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    try {
+      await this.blockchain.sealPendingBlocksStream(send);
       res.end();
     } catch {
       res.end();
