@@ -8,11 +8,16 @@ config();
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix("api");
-  const corsOrigins = process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()) ?? [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-  ];
-  app.enableCors({ origin: corsOrigins });
+  const corsOrigins =
+    process.env.CORS_ORIGINS?.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean) ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
+  const allowAllOrigins = corsOrigins.includes("*");
+  app.enableCors({
+    origin: allowAllOrigins ? true : corsOrigins,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Accept"],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
