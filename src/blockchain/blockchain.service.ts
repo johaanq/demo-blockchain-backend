@@ -3,7 +3,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  OnModuleInit,
 } from "@nestjs/common";
 import { BlockFactory } from "../application/services/BlockFactory";
 import { PowMiner } from "../application/services/PowMiner";
@@ -13,7 +12,6 @@ import { InitializeChainUseCase } from "../application/use-cases/InitializeChain
 import type { MineStreamEvent } from "../application/types/mining-stream";
 import { SealPendingBlocksUseCase } from "../application/use-cases/SealPendingBlocksUseCase";
 import { TamperBlockUseCase } from "../application/use-cases/TamperBlockUseCase";
-import { SeedDemoUseCase } from "../application/use-cases/SeedDemoUseCase";
 import { ValidateChainUseCase } from "../application/use-cases/ValidateChainUseCase";
 import type { IBlockchainRepository } from "../domain/ports/IBlockchainRepository";
 import type { IHashService } from "../domain/ports/IHashService";
@@ -24,11 +22,10 @@ const MIN_DIFFICULTY = 1;
 const MAX_DIFFICULTY = 6;
 
 @Injectable()
-export class BlockchainService implements OnModuleInit {
+export class BlockchainService {
   private readonly initializeChainUseCase: InitializeChainUseCase;
   private readonly getChainUseCase: GetChainUseCase;
   private tamperBlockUseCase!: TamperBlockUseCase;
-  private seedDemoUseCase!: SeedDemoUseCase;
   private readonly blockFactory: BlockFactory;
   private readonly hashService: IHashService;
   private addBlockUseCase!: AddBlockUseCase;
@@ -48,12 +45,6 @@ export class BlockchainService implements OnModuleInit {
     this.initializeChainUseCase = new InitializeChainUseCase(repository, this.blockFactory);
     this.getChainUseCase = new GetChainUseCase(repository);
     this.rebuildPowUseCases();
-  }
-
-  async onModuleInit() {
-    if (!this.repository.isInitialized()) {
-      await this.initializeChainUseCase.execute();
-    }
   }
 
   health() {
@@ -78,17 +69,7 @@ export class BlockchainService implements OnModuleInit {
   async initChain() {
     await this.repository.reset();
     const blocks = await this.initializeChainUseCase.execute();
-    return { message: "Cadena inicializada", blocks };
-  }
-
-  async seedDemo() {
-    await this.repository.reset();
-    const seedResult = await this.seedDemoUseCase.execute();
-    const blocks = await this.getChainUseCase.execute();
-    return {
-      ...seedResult,
-      blocks: blocks.blocks,
-    };
+    return { message: "Cadena inicializada (solo génesis)", blocks };
   }
 
   async getChain() {
@@ -200,11 +181,6 @@ export class BlockchainService implements OnModuleInit {
       this.blockFactory,
       this.hashService,
       this.difficulty,
-    );
-    this.seedDemoUseCase = new SeedDemoUseCase(
-      this.repository,
-      this.blockFactory,
-      this.addBlockUseCase,
     );
     this.tamperBlockUseCase = new TamperBlockUseCase(
       this.repository,

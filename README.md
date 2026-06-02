@@ -35,8 +35,7 @@ docker compose up --build
 |--------|------|-------------|
 | GET | `/api/health` | Estado y dificultad PoW |
 | PATCH | `/api/config/difficulty` | Ajustar dificultad del sellado |
-| POST | `/api/chain/init` | Apertura de jornada (génesis) |
-| POST | `/api/chain/seed` | Génesis + 4 votos demo (sin sellar) |
+| POST | `/api/chain/init` | Apertura de jornada (solo génesis) |
 | GET | `/api/chain` | Cadena de escrutinio |
 | POST | `/api/chain/blocks` | Registrar voto sin sellar |
 | POST | `/api/chain/mine` | Sellar voto (PoW) |
@@ -46,7 +45,9 @@ docker compose up --build
 
 ## Génesis
 
-Al iniciar la cadena se crea el bloque:
+Al arrancar el servidor la cadena está **vacía** (sin registros). La jornada se abre con `POST /api/chain/init` o automáticamente al registrar el primer voto desde el frontend.
+
+Al inicializar se crea el bloque:
 
 `GENESIS | 2da-vuelta-PE | KEIKO vs SANCHEZ | apertura-jornada | 07-jun-2026`
 

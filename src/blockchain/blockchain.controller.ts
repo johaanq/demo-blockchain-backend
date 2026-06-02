@@ -24,12 +24,6 @@ export class BlockchainController {
     return this.blockchain.initChain();
   }
 
-  @Post("chain/seed")
-  @HttpCode(HttpStatus.CREATED)
-  seedDemo() {
-    return this.blockchain.seedDemo();
-  }
-
   @Get("chain")
   getChain() {
     return this.blockchain.getChain();
