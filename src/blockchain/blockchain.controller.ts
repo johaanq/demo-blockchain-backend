@@ -90,6 +90,11 @@ export class BlockchainController {
     return this.blockchain.validate();
   }
 
+  @Get("chain/emission-acta")
+  getEmissionActa() {
+    return this.blockchain.getEmissionActa();
+  }
+
   @Post("chain/tamper")
   tamper(@Body() dto: TamperBlockDto) {
     return this.blockchain.tamper(dto.index, dto.data);

@@ -3,6 +3,17 @@ import { BlockFactory } from "../services/BlockFactory";
 import type { Block } from "../../domain/entities/Block";
 import type { IHashService } from "../../domain/ports/IHashService";
 
+export type EmissionComparison = {
+  blockIndex: number;
+  officialData: string;
+  chainData: string;
+  officialHash: string;
+  chainHash: string;
+  dataMatches: boolean;
+  hashMatches: boolean;
+  matches: boolean;
+};
+
 export type ValidationIssueDetail = {
   blockIndex: number;
   kind:
@@ -16,8 +27,11 @@ export type ValidationIssueDetail = {
   storedHash?: string;
   expectedHash?: string;
   dataSnippet?: string;
+  officialData?: string;
+  chainData?: string;
   officialDataSnippet?: string;
   officialHash?: string;
+  chainHash?: string;
 };
 
 export class ValidateChainUseCase {
@@ -63,14 +77,17 @@ export class ValidateChainUseCase {
     const emissionRecords = await this.repository.getEmissionRecords();
     const issues: string[] = [];
     const issueDetails: ValidationIssueDetail[] = [];
+    let chainIntegrityValid = true;
 
     chain.isValid((block, previous) => {
       if (!this.blockFactory.verify(block)) {
+        chainIntegrityValid = false;
         issueDetails.push(this.hashMismatchIssue(block));
         issues.push(`Registro #${block.index}: huella digital inconsistente`);
         return false;
       }
       if (previous && block.previousHash.toString() !== previous.hash.toString()) {
+        chainIntegrityValid = false;
         issueDetails.push({
           blockIndex: block.index,
           kind: "broken_link",
@@ -84,6 +101,7 @@ export class ValidateChainUseCase {
         return false;
       }
       if (block.index > 0 && block.nonce === 0) {
+        chainIntegrityValid = false;
         issueDetails.push({
           blockIndex: block.index,
           kind: "pow_pending",
@@ -99,6 +117,7 @@ export class ValidateChainUseCase {
         block.nonce > 0 &&
         !this.hashService.meetsDifficulty(block.hash.toString(), this.difficulty)
       ) {
+        chainIntegrityValid = false;
         issueDetails.push({
           blockIndex: block.index,
           kind: "pow_invalid",
@@ -113,22 +132,38 @@ export class ValidateChainUseCase {
       return true;
     });
 
+    const emissionComparisons: EmissionComparison[] = [];
+
     for (const record of emissionRecords) {
       const block = blocks[record.blockIndex];
       if (!block) continue;
 
-      if (block.data !== record.data) {
+      const dataMatches = block.data === record.data;
+      const hashMatches = block.hash.toString() === record.hash;
+      const comparison: EmissionComparison = {
+        blockIndex: record.blockIndex,
+        officialData: record.data,
+        chainData: block.data,
+        officialHash: record.hash,
+        chainHash: block.hash.toString(),
+        dataMatches,
+        hashMatches,
+        matches: dataMatches,
+      };
+      emissionComparisons.push(comparison);
+
+      if (!dataMatches) {
         issueDetails.push({
           blockIndex: record.blockIndex,
           kind: "emission_mismatch",
           title: `Registro #${record.blockIndex}: sufragio distinto al acta de emisión`,
           detail:
-            "El contenido del sufragio ya no coincide con la acta de emisión guardada al momento del voto. " +
-            "Aunque un atacante re-calcule hashes y re-mina la cadena, esta comparación revela qué voto fue cambiado.",
-          officialDataSnippet: this.snippet(record.data),
-          dataSnippet: this.snippet(block.data),
+            "Comparación real: el sufragio en la cadena blockchain ya no es igual al guardado " +
+            "en el acta de emisión inmutable al momento del voto.",
+          officialData: record.data,
+          chainData: block.data,
           officialHash: record.hash,
-          storedHash: block.hash.toString(),
+          chainHash: block.hash.toString(),
         });
         issues.push(
           `Registro #${record.blockIndex}: el sufragio difiere del acta de emisión oficial`,
@@ -136,28 +171,36 @@ export class ValidateChainUseCase {
       }
     }
 
-    const allValid = issues.length === 0;
+    const emissionAuditValid = emissionComparisons.every((c) => c.matches);
+    const structuralIssues = issueDetails.filter((d) => d.kind !== "emission_mismatch");
     const emissionIssues = issueDetails.filter((d) => d.kind === "emission_mismatch");
+    const allValid = chainIntegrityValid && emissionAuditValid;
 
     const howItWorks =
-      "Al emitir cada sufragio se guarda una copia inmutable en el acta de emisión (contenido + hash oficial). " +
-      "Un atacante puede alterar el voto, recalcular hashes y re-minar la cadena; al validar, el sistema contrasta " +
-      "la cadena actual con esa acta y reporta qué registro dejó de coincidir.";
+      "Paso 1 — Integridad blockchain: se verifican enlaces entre bloques, hashes recalculados y PoW. " +
+      "Un atacante puede re-minar y pasar esta prueba. " +
+      "Paso 2 — Acta de emisión: se compara byte a byte cada sufragio de la cadena con la copia inmutable " +
+      "guardada al emitir el voto; si difieren, el fraude queda expuesto aunque la cadena parezca válida.";
 
     return {
       valid: allValid,
+      chainIntegrityValid,
+      emissionAuditValid,
+      emissionComparisons,
       length: blocks.length,
       issues,
       issueDetails,
       message: allValid
-        ? "El registro electoral es íntegro. Ningún voto difiere del acta de emisión."
-        : emissionIssues.length > 0
-          ? emissionIssues.length === 1
-            ? `Fraude detectado: el registro #${emissionIssues[0].blockIndex} ya no coincide con el acta de emisión.`
-            : `Fraude detectado en ${emissionIssues.length} registro(s) respecto al acta de emisión.`
-          : issueDetails.length === 1
-            ? `Alteración detectada en el registro #${issueDetails[0].blockIndex}.`
-            : `Alteración detectada en ${issueDetails.length} registro(s) de la cadena.`,
+        ? "El registro electoral es íntegro. La cadena blockchain y el acta de emisión coinciden en todos los registros."
+        : !chainIntegrityValid && !emissionAuditValid
+          ? "La cadena presenta fallos estructurales y también difiere del acta de emisión."
+          : chainIntegrityValid && !emissionAuditValid
+            ? emissionIssues.length === 1
+              ? `La cadena blockchain es estructuralmente válida, pero el registro #${emissionIssues[0].blockIndex} no coincide con el acta de emisión.`
+              : `La cadena blockchain es estructuralmente válida, pero ${emissionIssues.length} registro(s) no coinciden con el acta de emisión.`
+            : structuralIssues.length === 1
+              ? `Alteración estructural detectada en el registro #${structuralIssues[0].blockIndex}.`
+              : `Alteración estructural detectada en ${structuralIssues.length} registro(s).`,
       howItWorks,
     };
   }

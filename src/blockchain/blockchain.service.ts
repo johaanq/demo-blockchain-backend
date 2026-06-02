@@ -165,6 +165,24 @@ export class BlockchainService implements OnModuleInit {
     return this.run(() => this.validateChainUseCase.execute());
   }
 
+  async getEmissionActa() {
+    return this.run(async () => {
+      const records = await this.repository.getEmissionRecords();
+      return {
+        count: records.length,
+        records: records.map((r) => ({
+          blockIndex: r.blockIndex,
+          data: r.data,
+          hash: r.hash,
+          timestamp: r.timestamp,
+          recordedAt: r.recordedAt,
+        })),
+        message:
+          "Acta de emisión inmutable — copia oficial al registrar cada sufragio. No se modifica al alterar la cadena.",
+      };
+    });
+  }
+
   async tamper(index: number, data: string) {
     return this.run(() => this.tamperBlockUseCase.execute(index, data.trim()));
   }
